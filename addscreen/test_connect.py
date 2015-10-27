@@ -1,19 +1,21 @@
-__author__ = 'tt'
-"""
-Shows a list of all current issues (AKA tripped triggers)
-"""
 
+#_*_ coding:utf-8 _*_
 from getpass import getpass
 from pyzabbix import ZabbixAPI
+import ConfigParser
+import sys
 
-# The hostname at which the Zabbix web interface is available
-ZABBIX_SERVER = 'http://192.168.142.99'
+config = ConfigParser.ConfigParser()
+with open("../conf/default.conf","rw") as cfgfile:
+    config.readfp(cfgfile)
+ZABBIX_SERVER = config.get("sign","url")
+USER = config.get("sign","user")
+PASSWORD = config.get("sign","password")
+
 zapi = ZabbixAPI(ZABBIX_SERVER)
-# Login to the Zabbix API
-zapi.login('name', 'password')
+zapi.login('%s'%(USER), '%s'%(PASSWORD))
 
-
-#get host_id and store to a list
+#获取hostid
 def get_hostids():
     host_list = open('host_list.txt','r')
     host_id_list = []
@@ -28,65 +30,71 @@ def get_hostids():
     host_list.close()
     return host_id_list
 
-host_id_list=get_hostids()
-print(host_id_list)
-
-#through hostids get graphids
-def get_graphids():
-    graph_list = open('graph.txt','r')
-    graph_name = graph_list.readline().strip('\n')
+#获取graphid
+def get_graphids(graph_name):
+    graph_name = graph_name
     graph_id_list = []
     for host_ids in host_id_list:
         host_id = host_ids[0]
-        print(host_id)
+        #   print(host_id)
         graph_info=zapi.graph.get(
             output='extend',
             hostids=host_id,
             filter={'name':'%s'%(graph_name) }
         )
-        print(graph_info)
+        #   print(graph_info)
         graph_id_list.append([t['graphid'] for t in graph_info])
-    graph_list.close()
     return graph_id_list
 
-graph_id_list=get_graphids()
-print(graph_id_list)
-
-#create a screen ,back the screenids
-def create_screen():
+#create a screen ,return the screenids
+def create_screen(screen_name,h=3,v=2):
     screen_info=zapi.screen.create(
-        name='publishing environment cpu ultilization',
-        hsize=3,
-        vsize=7
+        name=screen_name,
+        hsize=h,
+        vsize=v
     )
     screen_id=screen_info['screenids']
     return screen_id
 
-#screen_info=create_screen()
-#print(screen_info)
-#screen_id=screen_info['screenids']
-#print(screen_id[0])
+def screen_exist(screen_name):
+    exist_judge=zapi.screen.exists(
+        name=screen_name
+    )
+    return exist_judge
 
 #batch add screen_items to screen
-def create_screen_item():
+def create_screen_item(screen_name,h=3,v=2,resourcetype=0,height=100,width=350):
     i=0
-    screen_id=create_screen()
-    for xx in range(0,7):
-        for yy in range(0,3):
+    list = open("host_list.txt")
+    count = len(list.readlines())
+    list.close()
+    screen_id=create_screen(screen_name,h,v)
+    for xx in range(0,v):
+        for yy in range(0,h):
             zapi.screenitem.create(
                 screenid=screen_id[0],
-                resourcetype=0,
+                resourcetype=resourcetype,
                 resourceid=graph_id_list[i][0],
                 x=yy,
                 y=xx,
-                height=100,
-                width=350
+                height=height,
+                width=width
             )
-            if i < 19:
+            if i < count-1:
                 i +=1
             else:
                 break
-    return "Execute successfully"
+    return "\nExecute successfully"
 
-response=create_screen_item()
-print(response)
+screen_name = raw_input("please input you want to create screen name:\n")
+if screen_exist(screen_name):
+    print("screen name is exist")
+    print("please rename your screen_name")
+else:
+    graph_name = raw_input("please input the graph name:\n")
+    h = input("hsize:\n")
+    v = input("vsize:\n")
+    host_id_list=get_hostids()
+    graph_id_list=get_graphids(graph_name)
+    response=create_screen_item(screen_name,h,v)
+    print(response)
