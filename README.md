@@ -1,5 +1,9 @@
-# zbx_batch_add_screen
+#zabbix-tools
+
 初学python，找的一个工作中需要用到的项目，在空余时间来完成。
+
+目的：
+    自定义开发zabbix的一些小工具，顺便练习python。
 
 目标：
 
