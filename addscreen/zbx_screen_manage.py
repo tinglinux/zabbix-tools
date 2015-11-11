@@ -27,6 +27,13 @@ parser.add_argument("--updatebyposition-item",dest="updatebyposition_item",actio
 
 args = parser.parse_args()
 
+if not args.server:
+    args.server=raw_input("server url(http://localhost):")
+if not args.user:
+    args.user=raw_input("Username:")
+if not args.password:
+    args.password=getpass()
+
 ZABBIX_SERVER = args.server
 USER = args.user
 PASSWORD = args.password
@@ -52,12 +59,18 @@ def screen_exist(screen_name):
     return exist_judge
 
 def screen_get(screen_name,output="extend",selectScreenItems="extend"):
-        response=zapi.screen.get(
-            filter={'name':'%s'%(screen_name)},
-            output=output,
-            selectScreenItems=selectScreenItems
-        )
-        return response
+    response=zapi.screen.get(
+        filter={'name':'%s'%(screen_name)},
+        output=output,
+        selectScreenItems=selectScreenItems
+    )
+    return response
+
+def screen_update(screenid,screenname):
+    zapi.screen.update(
+        screenid=screenid,
+        name=screenname
+    )
 
 if args.create_screen :
     print("now we will create a screen:")
@@ -81,6 +94,33 @@ elif args.delete_screen:
         print("delete success")
     else:
         print("this screen name does't exist,please check your screen name")
+elif args.screen.exist :
+    screen_name=raw_input("please input the screen name:")
+    status=screen_exist(screen_name)
+    if status:
+        print("this screen name exist")
+    else :
+        print("no this screen")
+elif args.get.screen :
+    screen_name=raw_input("please input the screen name:")
+    status=screen_exist(screen_name)
+    if status:
+        response=screen_get(screen_name)
+        print(response)
+    else :
+        print("this screen is not exist")
+elif args.update.screen :
+    screen_name=raw_input("please input the screen name:")
+    status=screen_exist(screen_name)
+    if status:
+        screenid=screen_get(screen_name)[0]['screenid']
+        screen_update(screenid,screen_name)
+        print("update success")
+    else :
+        print("this screen is not exist")
+
+
+
 
 
 
