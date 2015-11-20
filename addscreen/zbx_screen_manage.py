@@ -9,6 +9,9 @@ import optparse
 import argparse
 import os
 
+"""
+ python  传入参数
+"""
 parser = argparse.ArgumentParser()
 parser.add_argument("-s","--server",metavar="url",help="zabbix server url")
 parser.add_argument("-u","--user",metavar="username",help="zabbix user name")
@@ -26,6 +29,7 @@ parser.add_argument("--iswriteable-item",dest="iswriteable_item",action="store_t
 parser.add_argument("--update-item",dest="update_item",action="store_true",help="update item's info")
 parser.add_argument("--updatebyposition-item",dest="updatebyposition_item",action="store_true",help="update item by the item's position")
 parser.add_argument("--file",dest="filename",help="host list file")
+parser.add_argument("--hostgroup",dest="hostgroup",help="hostgroup name")
 args = parser.parse_args()
 
 if not args.server:
@@ -41,6 +45,9 @@ PASSWORD = args.password
 zapi = ZabbixAPI(ZABBIX_SERVER)
 zapi.login('%s'%(USER), '%s'%(PASSWORD))
 
+"""
+screen 创建.删除.更新.获取函数
+"""
 def create_screen(screen_name,h=3,v=2):
     screen_info=zapi.screen.create(
         name=screen_name,
@@ -73,18 +80,23 @@ def screen_update(json_name):
     )
 
 def get_hostids(filename):
-    if os.path.exists(filename):
+    if args.filename:
         host_list = open('%s'%(filename),'r')
         host_id_list = []
         for host_name in host_list.readlines():
             host_name = host_name.strip('\n')
             print(host_name)
             host_info=zapi.host.get(
-                output='extend',
+                output='hostid',
                 filter={'host':'%s'%(host_name)}
             )
             host_id_list.append([t['hostid'] for t in host_info])
         host_list.close()
+        length=len(host_id_list)
+        for i in range(0,length):
+            hostid=host_id_list[i][0]
+            host_id_list[i]=hostid
+        print(host_id_list)
         return host_id_list
     else :
         hostname=filename
@@ -101,7 +113,7 @@ def get_graphids(graph_name,host_id_list):
     graph_id_list = []
     print(host_id_list)
     for host_ids in host_id_list:
-        host_id = host_ids[0]
+        host_id = host_ids
         print(host_id)
         graph_info=zapi.graph.get(
             output='extend',
@@ -112,17 +124,58 @@ def get_graphids(graph_name,host_id_list):
         graph_id_list.append([t['graphid'] for t in graph_info])
     return graph_id_list
 
+def get_groupid(groupname):
+    host_id_list=[]
+    groupname=groupname
+    group_info=zapi.hostgroup.get(
+        output="extend",
+        filter={'name':'%s'%(groupname)}
+    )
+    group_id=group_info[0]['groupid']
+    host_id=zapi.host.get(
+        groupids=group_id,
+        output="hostid"
+    )
+    host_id_list.append([t['hostid'] for t in host_id])
+    return host_id_list[0]
+
 def create_screen_item(filename,screen_name,graph_list_id,h=3,v=2,resourcetype=0,height=100,width=350):
     i=0
-    if os.path.exists(filename):
+    if args.filename:
         list = open("%s"%(filename))
         count = len(list.readlines())
         list.close()
         graph_id_list=graph_list_id
         screen_id=screen_get(screen_name)[0]['screenid']
         print(screen_id)
+        v=int(v)
+        h=int(h)
+        for xx in range(0,v):
+            for yy in range(0,h):
+                zapi.screenitem.create(
+                    screenid=screen_id,
+                    resourcetype=resourcetype,
+                    resourceid=graph_id_list[i][0],
+                    x=yy,
+                    y=xx,
+                    height=height,
+                    width=width
+                )
+                if i < count-1:
+                   i +=1
+                else:
+                    break
+        return "\nExecute successfully"
+    elif args.hostgroup:
+        host_id_list=filename
+        count=len(host_id_list)
         print(count)
+        graph_id_list=graph_list_id
         print(graph_id_list)
+        screen_id=screen_get(screen_name)[0]['screenid']
+        print(screen_id)
+        v=int(v)
+        h=int(h)
         for xx in range(0,v):
             for yy in range(0,h):
                 zapi.screenitem.create(
@@ -156,6 +209,14 @@ def create_screen_item(filename,screen_name,graph_list_id,h=3,v=2,resourcetype=0
             width=width
         )
         return "\nExecute successfully"
+
+"""
+创建screen,输入参数screen_name,hsize,vsize
+删除screen,传入参数screen_name
+判断screen是否存在，传入参数screen_name
+获取screen的信息，传入参数screen_name
+向screen中增加items,传入参数file/host/hostgroup graph_name screen_name width higth sourcetype
+"""
 
 if args.create_screen :
     print("now we will create a screen:")
@@ -210,8 +271,40 @@ elif args.create_item :
         host_id_list=get_hostids(filename)
         graph_name=raw_input("input the graph name:")
         screen_name=raw_input("input the screen name:")
+        status=screen_exist(screen_name)
+        if status:
+            print("go on!")
+        else :
+            print("this screen is not exist,we will create use this name")
+            column=input("please input the screen high size:")
+            row=input("please input the screen width size:")
+            response=create_screen(screen_name,column,row)
+            print("create sucess and the screenid is %s"%response[0])
+        width=raw_input("this graph x place:")
+        hight=raw_input("this graph y place:")
+        source=raw_input("this graph sourcetype(0-9):")
         graph_id_list=get_graphids(graph_name,host_id_list)
-        response=create_screen_item(filename,screen_name,graph_id_list,h=3,v=1,resourcetype=0,height=100,width=350)
+        response=create_screen_item(filename,screen_name,graph_id_list,h=width,v=hight,resourcetype=source,height=100,width=350)
+        print(response)
+    elif args.hostgroup:
+        hostgroup=args.hostgroup
+        host_id_list=get_groupid(hostgroup)
+        graph_name=raw_input("input the graph name:")
+        screen_name=raw_input("input the screen name:")
+        status=screen_exist(screen_name)
+        if status:
+            print("go on!")
+        else :
+            print("this screen is not exist,we will create use this name")
+            column=input("please input the screen high size:")
+            row=input("please input the screen width size:")
+            response=create_screen(screen_name,column,row)
+            print("create sucess and the screenid is %s"%response[0])
+        width=raw_input("this graph x place:")
+        hight=raw_input("this graph y place:")
+        source=raw_input("this graph sourcetype(0-9):")
+        graph_id_list=get_graphids(graph_name,host_id_list)
+        response=create_screen_item(host_id_list,screen_name,graph_id_list,h=width,v=hight,resourcetype=source,height=100,width=350)
         print(response)
     else:
         print("this file is not exist")
